@@ -1,0 +1,37 @@
+:root { font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif; }
+body, #root { height: 100vh; margin: 0; }
+.center {
+min-height: 100vh;
+display: grid;
+place-items: center;
+background: #f9fbff;
+}
+.card {
+background: white;
+padding: 2rem;
+border-radius: 1rem;
+box-shadow: 0 10px 30px rgba(0,0,0,.08);
+width: min(680px, 92vw);
+}
+.h1-celeste {
+margin: 0 0 1rem;
+text-align: center;
+color: #0ea5e9; /* celeste */
+font-size: 2rem;
+font-weight: 800;
+}
+.row { display: flex; gap: .75rem; align-items: center; }
+.row + .row { margin-top: .5rem; }
+label { font-size: .9rem; color: #334155; }
+input, select {
+padding: .6rem .7rem; border: 1px solid #cbd5e1; border-radius: .7rem; flex: 1;
+}
+button {
+border: none; padding: .7rem 1rem; border-radius: .8rem; cursor: pointer; font-weight: 600;
+}
+.btn-primary { background: #0ea5e9; color: white; }
+.btn-ghost { background: #e2e8f0; }
+.note { font-size: .9rem; color: #475569; }
+.status-ok { color: #16a34a; font-weight: 700; }
+.status-bad { color: #dc2626; font-weight: 700; }
+.hr { height: 1px; background: #e2e8f0; margin: 1rem 0; border: 0; }
