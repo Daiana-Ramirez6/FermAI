@@ -1,43 +1,139 @@
-import { useRef, useState } from "react";
-import { testMqttConnect, connectWebSocket, type MqttCreds } from "../services/mqttService";
+// frontend/src/components/FormMosquitto.tsx
+import React, { useState } from "react";
+import { MqttCreds, TopicRow, KIND_LABEL } from "../types";
+import { testMqttConnect } from "../services/mqttService";
 
-export default function PasoMosquitto() {
-  const [form, setForm] = useState<MqttCreds>({ host: "", port: 1883, username: "", password: "" });
-  const [status, setStatus] = useState<string>("");
-  const [lastMsg, setLastMsg] = useState<any>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+type Props = {
+  onConnected: (creds: MqttCreds, topics: TopicRow[]) => void;
+};
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setStatus("Probando conexión...");
+export default function FormMosquitto({ onConnected }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<{ ok: boolean; detail: string } | null>(null);
+
+  const [form, setForm] = useState<MqttCreds>({
+    host: "",
+    port: 1883,
+    username: "",
+    password: "",
+  });
+
+  const [rows, setRows] = useState<TopicRow[]>([
+    { id: crypto.randomUUID?.() ?? String(Date.now()), kind: "t_sonda", topic: "" },
+  ]);
+
+  const updateRow = (id: string, patch: Partial<TopicRow>) =>
+    setRows(prev => prev.map(r => (r.id === id ? { ...r, ...patch } : r)));
+
+  const addRow = () =>
+    setRows(prev => [
+      ...prev,
+      {
+        id: crypto.randomUUID?.() ?? String(Date.now() + prev.length + 1),
+        kind: "t_sonda",
+        topic: "",
+      },
+    ]);
+
+  async function handleTest() {
+    setLoading(true);
+    setStatus(null);
     try {
-      const resp = await testMqttConnect(form);
-      setStatus("Conexión OK ✅");
-      // Abrir WS si no está abierto
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        wsRef.current = connectWebSocket((data) => setLastMsg(data));
-      }
-    } catch (err: any) {
-      setStatus("Conexión fallida ❌ " + (err?.message || ""));
+      const data = await testMqttConnect(form);
+      setStatus(data);
+      if (data.ok) onConnected(form, rows);
+    } catch (e: any) {
+      setStatus({ ok: false, detail: e?.message || "Error de conexión" });
+    } finally {
+      setLoading(false);
     }
   }
 
-  function onCleanup() {
-    wsRef.current?.close();
-    wsRef.current = null;
-  }
-
   return (
-    <form onSubmit={onSubmit}>
-      <input value={form.host} onChange={(e)=>setForm({...form,host:e.target.value})} placeholder="host" />
-      <input value={form.port} onChange={(e)=>setForm({...form,port:Number(e.target.value)})} type="number" placeholder="port" />
-      <input value={form.username} onChange={(e)=>setForm({...form,username:e.target.value})} placeholder="usuario" />
-      <input value={form.password} onChange={(e)=>setForm({...form,password:e.target.value})} type="password" placeholder="password" />
-      <button type="submit">Probar vinculación</button>
-      <button type="button" onClick={onCleanup}>Cerrar WS</button>
+    <section>
+      <h1 className="h1-celeste">Vinculación Mosquitto</h1>
 
-      <p>{status}</p>
-      {lastMsg && <pre style={{whiteSpace:"pre-wrap"}}>{JSON.stringify(lastMsg,null,2)}</pre>}
-    </form>
+      <div className="form">
+        <div className="row">
+          <label>host</label>
+          <input
+            placeholder="ej: broker.hivemq.com"
+            value={form.host}
+            onChange={(e) => setForm({ ...form, host: e.target.value })}
+          />
+        </div>
+
+        <div className="row">
+          <label>usuario</label>
+          <input
+            value={form.username}
+            onChange={(e) => setForm({ ...form, username: e.target.value })}
+          />
+        </div>
+
+        <div className="row">
+          <label>pass</label>
+          <input
+            type="password"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+          />
+        </div>
+
+        <div className="row">
+          <label>port</label>
+          <input
+            type="number"
+            value={form.port}
+            onChange={(e) => setForm({ ...form, port: Number(e.target.value) })}
+          />
+        </div>
+
+        {/* Botón centrado */}
+        <div className="btn-row">
+          <button className="btn-primary" onClick={handleTest} disabled={loading || !form.host.trim()}>
+            {loading ? "Verificando…" : "Probar vinculación"}
+          </button>
+        </div>
+
+        {/* Estado debajo del botón */}
+        {status && (
+          <span className={status.ok ? "status-ok" : "status-bad"}>
+            {status.detail}
+          </span>
+        )}
+
+        <hr className="hr" />
+
+        <p className="note">Configura los tópicos:</p>
+
+        {rows.map((r) => (
+          <div className="row topic" key={r.id}>
+            <select
+              value={r.kind}
+              onChange={(e) => updateRow(r.id, { kind: e.target.value as TopicRow["kind"] })}
+            >
+              {Object.entries(KIND_LABEL).map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
+
+            <input
+              placeholder="ej: tempeh/t_sonda"
+              value={r.topic}
+              onChange={(e) => updateRow(r.id, { topic: e.target.value })}
+            />
+          </div>
+        ))}
+
+        <div className="btn-row" style={{ marginTop: ".75rem" }}>
+          <button className="btn-ghost" onClick={addRow}>
+            + agregar tópico
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
