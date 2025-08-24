@@ -5,6 +5,9 @@ from pydantic import BaseModel, Field
 import paho.mqtt.client as mqtt
 import time, json
 import threading
+from app.schemas.mqtt import SubscribeReq, SubscribeResp   # ➕
+from app.services.mqtt_service import MqttService as MqttSvc  # ➕ alias para no chocar con tu clase local
+
 from typing import Optional, List, Set
 
 app = FastAPI(title="FermAI API", version="0.3.0")
@@ -180,3 +183,8 @@ async def ws_stream(
         pass
     finally:
         BRIDGE.detach_ws(ws)
+
+@app.post("/api/mqtt/subscribe", response_model=SubscribeResp)   # ➕
+def mqtt_subscribe(req: SubscribeReq) -> SubscribeResp:
+    data = MqttSvc.subscribe_and_probe(req)
+    return SubscribeResp(**data)

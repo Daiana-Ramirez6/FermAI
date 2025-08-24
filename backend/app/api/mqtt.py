@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Body
-from ..schemas.mqtt import PublishMsg, MqttCreds, TestResult
+from ..schemas.mqtt import PublishMsg, MqttCreds, TestResult, SubscribeReq, SubscribeResp  # ➕ agregado
 from ..services.mqtt_service import MqttService
 from ..core.bridge import BRIDGE
 
@@ -21,3 +21,9 @@ def mqtt_publish(
     # Ej: whitelist de tópicos aquí si lo necesitas
     c.publish(msg.topic, msg.payload)
     return {"ok": True}
+
+# ➕ agregado: endpoint para suscripción + verificación
+@router.post("/subscribe", response_model=SubscribeResp)
+def mqtt_subscribe(req: SubscribeReq) -> SubscribeResp:
+    data = MqttService.subscribe_and_probe(req)
+    return SubscribeResp(**data)

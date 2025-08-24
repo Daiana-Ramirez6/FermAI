@@ -1,7 +1,7 @@
 // frontend/src/components/FormMosquitto.tsx
 import React, { useState } from "react";
-import { MqttCreds, TopicRow, KIND_LABEL } from "../types";
-import { testMqttConnect } from "../services/mqttService";
+import { MqttCreds, TopicRow, KIND_LABEL, SubscribeResp } from "../types";
+import { testMqttConnect, subscribeTopics } from "../services/mqttService";
 
 type Props = {
   onConnected: (creds: MqttCreds, topics: TopicRow[]) => void;
@@ -22,11 +22,15 @@ export default function FormMosquitto({ onConnected }: Props) {
     { id: crypto.randomUUID?.() ?? String(Date.now()), kind: "t_sonda", topic: "" },
   ]);
 
+  // --- NUEVO: estados para suscripción ---
+  const [subscribing, setSubscribing] = useState(false);
+  const [subResult, setSubResult] = useState<SubscribeResp | null>(null);
+
   const updateRow = (id: string, patch: Partial<TopicRow>) =>
-    setRows(prev => prev.map(r => (r.id === id ? { ...r, ...patch } : r)));
+    setRows((prev) => (prev.map((r) => (r.id === id ? { ...r, ...patch } : r))));
 
   const addRow = () =>
-    setRows(prev => [
+    setRows((prev) => [
       ...prev,
       {
         id: crypto.randomUUID?.() ?? String(Date.now() + prev.length + 1),
@@ -38,14 +42,42 @@ export default function FormMosquitto({ onConnected }: Props) {
   async function handleTest() {
     setLoading(true);
     setStatus(null);
+    setSubResult(null); // limpia cualquier resultado previo de suscripción
     try {
       const data = await testMqttConnect(form);
       setStatus(data);
+      // ⚠️ Mantengo tu lógica original:
+      // si la vinculación es OK, disparamos onConnected() aquí mismo
       if (data.ok) onConnected(form, rows);
     } catch (e: any) {
       setStatus({ ok: false, detail: e?.message || "Error de conexión" });
     } finally {
       setLoading(false);
+    }
+  }
+
+  // --- NUEVO: handler para llamar /api/mqtt/subscribe ---
+  async function handleSubscribe() {
+    const topics = rows.map((r) => r.topic.trim()).filter(Boolean);
+    if (topics.length === 0) return;
+
+    setSubscribing(true);
+    try {
+      const res = await subscribeTopics({
+        ...form,
+        topics,
+        qos: 0,
+        probe: true,
+        timeout_ms: 2500,
+      });
+      setSubResult(res);
+      // Si más adelante querés que recién aquí “se conecte” la app:
+      // if (res.ok && res.probe_ok) onConnected(form, rows);
+    } catch (e: any) {
+      setSubResult({ ok: false, granted: {}, probe_ok: null });
+      setStatus({ ok: false, detail: e?.message || "Error al suscribirse" });
+    } finally {
+      setSubscribing(false);
     }
   }
 
@@ -57,7 +89,7 @@ export default function FormMosquitto({ onConnected }: Props) {
         <div className="row">
           <label>host</label>
           <input
-            placeholder="ej: broker.hivemq.com"
+            placeholder="ej: matucesari.servehttp.com"
             value={form.host}
             onChange={(e) => setForm({ ...form, host: e.target.value })}
           />
@@ -91,7 +123,11 @@ export default function FormMosquitto({ onConnected }: Props) {
 
         {/* Botón centrado */}
         <div className="btn-row">
-          <button className="btn-primary" onClick={handleTest} disabled={loading || !form.host.trim()}>
+          <button
+            className="btn-primary"
+            onClick={handleTest}
+            disabled={loading || !form.host.trim()}
+          >
             {loading ? "Verificando…" : "Probar vinculación"}
           </button>
         </div>
@@ -111,7 +147,9 @@ export default function FormMosquitto({ onConnected }: Props) {
           <div className="row topic" key={r.id}>
             <select
               value={r.kind}
-              onChange={(e) => updateRow(r.id, { kind: e.target.value as TopicRow["kind"] })}
+              onChange={(e) =>
+                updateRow(r.id, { kind: e.target.value as TopicRow["kind"] })
+              }
             >
               {Object.entries(KIND_LABEL).map(([k, label]) => (
                 <option key={k} value={k}>
@@ -133,6 +171,47 @@ export default function FormMosquitto({ onConnected }: Props) {
             + agregar tópico
           </button>
         </div>
+
+        {/* NUEVO: botón Suscribirse (se habilita cuando ya hubo vinculación OK) */}
+        <div className="btn-row" style={{ marginTop: ".75rem" }}>
+          <button
+            className="btn-primary"
+            onClick={handleSubscribe}
+            disabled={subscribing || !status?.ok}
+            title={!status?.ok ? "Primero probá la vinculación" : ""}
+          >
+            {subscribing ? "Suscribiendo…" : "Suscribirse"}
+          </button>
+        </div>
+
+        {/* NUEVO: feedback granular de suscripción */}
+        {subResult && (
+          <div className="result" style={{ marginTop: ".5rem" }}>
+            <p className="note">Resultado de suscripción:</p>
+            <ul>
+              {Object.entries(subResult.granted).map(([topic, q]) => (
+                <li key={topic}>
+                  {q === 128 ? (
+                    <>
+                      ❌ <code>{topic}</code> (rechazado por ACL)
+                    </>
+                  ) : (
+                    <>
+                      ✅ <code>{topic}</code> (QoS {q})
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {subResult.probe_ok !== undefined && subResult.probe_ok !== null && (
+              <p className={subResult.probe_ok ? "status-ok" : "status-bad"}>
+                {subResult.probe_ok
+                  ? "✅ Recepción verificada"
+                  : "⚠️ No se pudo verificar recepción"}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
