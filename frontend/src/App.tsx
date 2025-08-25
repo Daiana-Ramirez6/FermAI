@@ -1,9 +1,12 @@
 import React, { useState } from "react";
 import FormMosquitto from "./components/FormMosquitto";
 import { MqttCreds, TopicRow } from "./types";
+import LiveView from "./components/LiveView"; 
 
 export default function App() {
   const [step, setStep] = useState<1 | 2>(1);
+  const isLive = new URLSearchParams(window.location.search).get("live") === "1";
+  if (isLive) return <LiveView />;
 
   function handleConnected(creds: MqttCreds, topics: TopicRow[]) {
     console.log("Conectado con", creds, "y topics", topics);

@@ -22,12 +22,12 @@ export default function FormMosquitto({ onConnected }: Props) {
     { id: crypto.randomUUID?.() ?? String(Date.now()), kind: "t_sonda", topic: "" },
   ]);
 
-  // --- NUEVO: estados para suscripción ---
+  // estados de suscripción
   const [subscribing, setSubscribing] = useState(false);
   const [subResult, setSubResult] = useState<SubscribeResp | null>(null);
 
   const updateRow = (id: string, patch: Partial<TopicRow>) =>
-    setRows((prev) => (prev.map((r) => (r.id === id ? { ...r, ...patch } : r))));
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   const addRow = () =>
     setRows((prev) => [
@@ -46,8 +46,7 @@ export default function FormMosquitto({ onConnected }: Props) {
     try {
       const data = await testMqttConnect(form);
       setStatus(data);
-      // ⚠️ Mantengo tu lógica original:
-      // si la vinculación es OK, disparamos onConnected() aquí mismo
+      // se mantiene tu flujo original
       if (data.ok) onConnected(form, rows);
     } catch (e: any) {
       setStatus({ ok: false, detail: e?.message || "Error de conexión" });
@@ -56,7 +55,6 @@ export default function FormMosquitto({ onConnected }: Props) {
     }
   }
 
-  // --- NUEVO: handler para llamar /api/mqtt/subscribe ---
   async function handleSubscribe() {
     const topics = rows.map((r) => r.topic.trim()).filter(Boolean);
     if (topics.length === 0) return;
@@ -71,7 +69,7 @@ export default function FormMosquitto({ onConnected }: Props) {
         timeout_ms: 2500,
       });
       setSubResult(res);
-      // Si más adelante querés que recién aquí “se conecte” la app:
+      // si querés mover el avance aquí:
       // if (res.ok && res.probe_ok) onConnected(form, rows);
     } catch (e: any) {
       setSubResult({ ok: false, granted: {}, probe_ok: null });
@@ -79,6 +77,20 @@ export default function FormMosquitto({ onConnected }: Props) {
     } finally {
       setSubscribing(false);
     }
+  }
+
+  // abre nueva pestaña con la vista de datos en vivo
+  function openLiveTab() {
+    const topics = rows.map((r) => r.topic.trim()).filter(Boolean);
+    const qs = new URLSearchParams({
+      live: "1",
+      host: form.host,
+      port: String(form.port),
+      username: form.username || "",
+      password: form.password || "",
+      topics: topics.join(","),
+    });
+    window.open(`/?${qs.toString()}`, "_blank");
   }
 
   return (
@@ -172,7 +184,7 @@ export default function FormMosquitto({ onConnected }: Props) {
           </button>
         </div>
 
-        {/* NUEVO: botón Suscribirse (se habilita cuando ya hubo vinculación OK) */}
+        {/* Suscribirse (habilitado tras vinculación OK) */}
         <div className="btn-row" style={{ marginTop: ".75rem" }}>
           <button
             className="btn-primary"
@@ -184,7 +196,7 @@ export default function FormMosquitto({ onConnected }: Props) {
           </button>
         </div>
 
-        {/* NUEVO: feedback granular de suscripción */}
+        {/* Resultados de suscripción */}
         {subResult && (
           <div className="result" style={{ marginTop: ".5rem" }}>
             <p className="note">Resultado de suscripción:</p>
@@ -212,7 +224,17 @@ export default function FormMosquitto({ onConnected }: Props) {
             )}
           </div>
         )}
+
+        {/* Siguiente: solo si suscripción OK + probe OK */}
+        {subResult?.ok && subResult?.probe_ok && (
+          <div className="btn-row" style={{ marginTop: ".75rem" }}>
+            <button className="btn-primary" onClick={openLiveTab}>
+              Siguiente
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );
 }
+
